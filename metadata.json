@@ -1,0 +1,5 @@
+{
+  "name": "Constella",
+  "description": "An AI-powered tool for generating consistent character images for stories. Upload reference images or generate characters from scratch, then create batches of story images from multiple prompts, maintaining character consistency throughout your narrative.",
+  "requestFramePermissions": []
+}
