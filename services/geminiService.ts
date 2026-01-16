@@ -51,3 +51,36 @@ const generateImage = async (prompt: string, referenceImages: { data: string, mi
 
   return null;
 };
+
+export const suggestCreativePrompt = async (context: {
+  storyName: string;
+  seriesName: string;
+  characters: string[];
+  existingPrompts: string[];
+}): Promise<string> => {
+  if (!process.env.API_KEY) {
+    throw new Error("API_KEY environment variable not set");
+  }
+
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  
+  const prompt = `You are a creative story boarding assistant. 
+  Given the following context:
+  - Series: ${context.seriesName}
+  - Story: ${context.storyName}
+  - Characters: ${context.characters.join(', ')}
+  - Previous plot beats: ${context.existingPrompts.filter(p => p.trim()).join(' | ')}
+  
+  Suggest ONE creative, highly descriptive, and visually interesting image prompt for the next scene in this sequence. 
+  The prompt should be written for an AI image generator. 
+  Focus on lighting, action, and character placement.
+  Keep it under 40 words. 
+  Output ONLY the prompt text, no extra commentary or quotes.`;
+
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-flash-preview',
+    contents: prompt,
+  });
+
+  return response.text?.trim() || "A cinematic scene featuring the characters.";
+};

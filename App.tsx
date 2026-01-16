@@ -2,9 +2,11 @@
 import React, { useState, useCallback } from 'react';
 import { ControlPanel } from './components/ControlPanel';
 import { ResultsDisplay } from './components/ResultsDisplay';
+import { Header } from './components/Header';
+import { Footer } from './components/Footer';
 import { XIcon } from './components/icons/XIcon';
 import { Character, GeneratedImageResult, ImageStyle, AspectRatio } from './types';
-import { generateImageWithRetry } from './services/geminiService';
+import { generateImageWithRetry, suggestCreativePrompt } from './services/geminiService';
 
 const App: React.FC = () => {
   const [characters, setCharacters] = useState<Character[]>([
@@ -18,6 +20,7 @@ const App: React.FC = () => {
   const [prompts, setPrompts] = useState<string[]>(['Character 1 running in the park']);
   const [generatedImages, setGeneratedImages] = useState<GeneratedImageResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isSuggesting, setIsSuggesting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
   const [storyName, setStoryName] = useState('MyFirstStory');
@@ -62,7 +65,6 @@ const App: React.FC = () => {
         console.error(e);
         const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred';
         setError(`An error occurred while generating images: ${errorMessage}`);
-        // Stop batch generation on first error
         break;
       }
     }
@@ -97,10 +99,31 @@ const App: React.FC = () => {
 
   }, [characters, style]);
 
+  const handleSuggestPrompt = useCallback(async () => {
+    setIsSuggesting(true);
+    try {
+      const characterNames = characters.filter(c => c.isSelected).map(c => c.name);
+      const newPrompt = await suggestCreativePrompt({
+        storyName,
+        seriesName,
+        characters: characterNames,
+        existingPrompts: prompts
+      });
+      setPrompts(prev => [...prev, newPrompt]);
+    } catch (e) {
+      console.error(e);
+      setError("Failed to suggest a creative prompt.");
+    } finally {
+      setIsSuggesting(false);
+    }
+  }, [characters, storyName, seriesName, prompts]);
+
 
   return (
-    <div className="min-h-screen bg-buzz-black font-sans">
-      <main className="flex flex-col lg:flex-row">
+    <div className="min-h-screen bg-buzz-black font-sans flex flex-col">
+      <Header />
+      
+      <main className="flex-grow flex flex-col lg:flex-row relative">
         <ControlPanel
           characters={characters}
           onUpdateCharacter={handleUpdateCharacter}
@@ -112,7 +135,9 @@ const App: React.FC = () => {
           prompts={prompts}
           setPrompts={setPrompts}
           onGenerateAll={handleGenerateAll}
+          onSuggestPrompt={handleSuggestPrompt}
           isLoading={isLoading}
+          isSuggesting={isSuggesting}
           storyName={storyName}
           setStoryName={setStoryName}
           seriesName={seriesName}
@@ -127,17 +152,19 @@ const App: React.FC = () => {
             onPreview={setPreviewImage}
         />
       </main>
+
+      <Footer />
       
       {previewImage && (
         <div 
-          className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4"
+          className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4 backdrop-blur-sm"
           onClick={() => setPreviewImage(null)}
         >
-          <div className="relative max-w-4xl max-h-[90vh] bg-gray-900 p-2 rounded-lg" onClick={e => e.stopPropagation()}>
-             <img src={`data:image/png;base64,${previewImage}`} alt="Generated Preview" className="max-w-full max-h-[85vh] object-contain rounded"/>
+          <div className="relative max-w-4xl max-h-[90vh] bg-gray-900 p-2 rounded-2xl shadow-2xl border border-bee-gold/20" onClick={e => e.stopPropagation()}>
+             <img src={`data:image/png;base64,${previewImage}`} alt="Generated Preview" className="max-w-full max-h-[85vh] object-contain rounded-xl"/>
              <button
                 onClick={() => setPreviewImage(null)}
-                className="absolute -top-4 -right-4 bg-bee-gold text-buzz-black rounded-full p-2 hover:bg-bee-amber transition-transform duration-200 hover:scale-110"
+                className="absolute -top-4 -right-4 bg-bee-gold text-buzz-black rounded-full p-2 hover:bg-bee-amber transition-transform duration-200 hover:scale-110 shadow-lg"
               >
                <XIcon />
             </button>

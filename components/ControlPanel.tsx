@@ -6,6 +6,7 @@ import { PlusIcon } from './icons/PlusIcon';
 import { TrashIcon } from './icons/TrashIcon';
 import { ChevronDownIcon } from './icons/ChevronDownIcon';
 import { ChevronUpIcon } from './icons/ChevronUpIcon';
+import { SparklesIcon } from './icons/SparklesIcon';
 
 interface ControlPanelProps {
   characters: Character[];
@@ -18,7 +19,9 @@ interface ControlPanelProps {
   prompts: string[];
   setPrompts: (prompts: string[]) => void;
   onGenerateAll: () => void;
+  onSuggestPrompt: () => void;
   isLoading: boolean;
+  isSuggesting: boolean;
   storyName: string;
   setStoryName: (name: string) => void;
   seriesName: string;
@@ -44,7 +47,7 @@ const CollapsibleSection: React.FC<{ title: string; children: React.ReactNode }>
 export const ControlPanel: React.FC<ControlPanelProps> = (props) => {
     const {
         characters, onUpdateCharacter, onGenerateCharacter, style, setStyle, aspectRatio, setAspectRatio,
-        prompts, setPrompts, onGenerateAll, isLoading,
+        prompts, setPrompts, onGenerateAll, onSuggestPrompt, isLoading, isSuggesting,
         storyName, setStoryName, seriesName, setSeriesName
     } = props;
 
@@ -113,7 +116,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = (props) => {
                             value={prompt}
                             onChange={e => handlePromptChange(index, e.target.value)}
                             rows={2}
-                            className="flex-grow bg-gray-800 border border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-bee-gold resize-none"
+                            className="flex-grow bg-gray-800 border border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-bee-gold resize-none text-sm"
                             placeholder={`Prompt ${index + 1}`}
                         />
                         <button onClick={() => handleRemovePrompt(index)} className="p-2 text-gray-400 hover:text-red-500 transition-colors">
@@ -121,12 +124,34 @@ export const ControlPanel: React.FC<ControlPanelProps> = (props) => {
                         </button>
                     </div>
                 ))}
-                {prompts.length < 10 && (
-                    <button onClick={handleAddPrompt} className="w-full flex items-center justify-center space-x-2 py-2 px-4 border-2 border-dashed border-gray-600 rounded-md text-gray-400 hover:text-white hover:border-gray-400 transition-colors">
-                        <PlusIcon />
-                        <span>Add Prompt</span>
+                
+                <div className="grid grid-cols-2 gap-2 mt-4">
+                    {prompts.length < 10 && (
+                        <button 
+                            onClick={handleAddPrompt} 
+                            className="flex items-center justify-center space-x-2 py-2 px-4 border-2 border-dashed border-gray-600 rounded-md text-gray-400 hover:text-white hover:border-gray-400 transition-colors text-xs font-bold"
+                        >
+                            <PlusIcon className="w-4 h-4" />
+                            <span>Add Step</span>
+                        </button>
+                    )}
+                    
+                    <button 
+                        onClick={onSuggestPrompt}
+                        disabled={isSuggesting}
+                        className="flex items-center justify-center space-x-2 py-2 px-4 bg-bee-gold/10 border border-bee-gold text-bee-gold rounded-md hover:bg-bee-gold hover:text-buzz-black transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed text-xs font-bold"
+                    >
+                        {isSuggesting ? (
+                            <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                            </svg>
+                        ) : (
+                            <SparklesIcon className="w-4 h-4" />
+                        )}
+                        <span>Magic Prompt</span>
                     </button>
-                )}
+                </div>
             </div>
         </CollapsibleSection>
       </div>
@@ -142,10 +167,10 @@ export const ControlPanel: React.FC<ControlPanelProps> = (props) => {
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
-              Generating...
+              Generating Story...
             </>
           ) : (
-            'Generate All Images'
+            'Render Sequence'
           )}
         </button>
       </div>
