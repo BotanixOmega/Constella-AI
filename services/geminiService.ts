@@ -1,5 +1,5 @@
 
-import { GoogleGenAI, Modality } from "@google/genai";
+import { GoogleGenAI, Modality, Type } from "@google/genai";
 
 const MAX_RETRIES = 3;
 
@@ -69,20 +69,23 @@ export const suggestCreativePrompt = async (context: {
   characters: string[];
   existingPrompts: string[];
   synopsis?: string;
+  activeCharacters?: string[];
 }): Promise<string> => {
   if (!process.env.API_KEY) {
     throw new Error("API_KEY environment variable not set");
   }
 
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const charsInContext = (context.activeCharacters?.length ? context.activeCharacters : context.characters).join(', ');
   
   const prompt = `You are a creative story boarding assistant for the series "${context.seriesName}".
   Synopsis: ${context.synopsis || "No synopsis provided."}
   Story: ${context.storyName}
-  Characters: ${context.characters.join(', ')}
+  Characters Available: ${context.characters.join(', ')}
+  Current Active Scene Characters: ${charsInContext}
   Previous plot beats: ${context.existingPrompts.filter(p => p.trim()).join(' | ')}
   
-  Suggest ONE creative, visually interesting image prompt for the NEXT scene in this sequence. 
+  Suggest ONE creative, visually interesting image prompt for the NEXT scene. 
   Focus on lighting, action, and cinematic placement. Keep it under 40 words. 
   Output ONLY the prompt text.`;
 
@@ -93,6 +96,49 @@ export const suggestCreativePrompt = async (context: {
 
   return response.text?.trim() || "A cinematic scene featuring the characters.";
 };
+
+export const suggestBulkScenes = async (context: {
+    storyName: string;
+    seriesName: string;
+    activeCharacters: string[];
+    synopsis: string;
+    count: number;
+    existingScenes: string[];
+}): Promise<string[]> => {
+    if (!process.env.API_KEY) {
+        throw new Error("API_KEY environment variable not set");
+    }
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+    const prompt = `Generate ${context.count} unique, sequential story scene prompts for the series "${context.seriesName}".
+    Synopsis: ${context.synopsis}
+    Active Characters: ${context.activeCharacters.join(', ')}
+    Already established scenes: ${context.existingScenes.filter(s => s.trim()).join(' | ')}
+    
+    Each scene should be a brief visual description for an image generator. 
+    Maintain a coherent narrative flow.
+    Return the result as a JSON array of strings.`;
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: prompt,
+        config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING }
+            }
+        }
+    });
+
+    try {
+        const scenes = JSON.parse(response.text || "[]");
+        return Array.isArray(scenes) ? scenes : [];
+    } catch (e) {
+        console.error("Failed to parse bulk scenes", e);
+        return [];
+    }
+}
 
 export const generateSynopsis = async (characters: string[]): Promise<string> => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });

@@ -10,7 +10,6 @@ interface ResultsDisplayProps {
   error: string | null;
   storyName: string;
   seriesName: string;
-  sceneNumber: string;
   onPreview: (imageData: string) => void;
 }
 
@@ -23,12 +22,11 @@ const downloadImage = (imageData: string, filename: string) => {
     document.body.removeChild(link);
 };
 
-export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ images, isLoading, error, storyName, seriesName, sceneNumber, onPreview }) => {
+export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ images, isLoading, error, storyName, seriesName, onPreview }) => {
 
   const handleDownloadAll = () => {
-    images.forEach((img, index) => {
-        const sNum = parseInt(sceneNumber) + index;
-        const filename = `Scene${sNum}_${storyName}_${seriesName}.png`;
+    images.forEach((img) => {
+        const filename = `Scene${img.sceneIndex}_${storyName}_${seriesName}.png`;
         downloadImage(img.imageData, filename);
     });
   };
@@ -41,7 +39,7 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ images, isLoadin
             {isLoading && (
                 <div className="flex items-center space-x-2 text-[10px] font-bold text-bee-gold animate-pulse">
                     <div className="w-1.5 h-1.5 rounded-full bg-bee-gold"></div>
-                    <span>PROCESING SEQUENCE...</span>
+                    <span>PROCESSING SEQUENCE...</span>
                 </div>
             )}
         </div>
@@ -69,14 +67,13 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ images, isLoadin
       )}
       
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
-        {images.map((img, index) => {
-            const sNum = parseInt(sceneNumber) + index;
-            const filename = `Scene${sNum}_${storyName}_${seriesName}.png`;
+        {images.map((img) => {
+            const filename = `Scene${img.sceneIndex}_${storyName}_${seriesName}.png`;
           return (
             <div key={img.id} className="group relative aspect-square bg-gray-950 rounded-xl overflow-hidden shadow-2xl border border-gray-900 hover:border-bee-gold/40 transition-all">
                 <img src={`data:image/png;base64,${img.imageData}`} alt={img.prompt} className="w-full h-full object-cover"/>
                 <div className="absolute bottom-2 left-2 bg-black/60 backdrop-blur-md px-2 py-0.5 rounded text-[8px] font-black text-white/70">
-                    S-{sNum}
+                    S-{img.sceneIndex}
                 </div>
                 <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center space-x-3">
                     <button onClick={() => onPreview(img.imageData)} className="p-2 bg-white/10 rounded-full hover:bg-white/20 transition-colors">

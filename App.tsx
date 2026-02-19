@@ -5,7 +5,7 @@ import { ResultsDisplay } from './components/ResultsDisplay';
 import { Header } from './components/Header';
 import { XIcon } from './components/icons/XIcon';
 import { Character, GeneratedImageResult, ImageStyle, AspectRatio } from './types';
-import { generateImageWithRetry, suggestCreativePrompt, generateSynopsis, enhanceSynopsis } from './services/geminiService';
+import { generateImageWithRetry, suggestCreativePrompt, generateSynopsis, enhanceSynopsis, suggestBulkScenes } from './services/geminiService';
 
 const INITIAL_CHARACTERS = ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten'];
 
@@ -28,6 +28,7 @@ const App: React.FC = () => {
   const [aspectRatioLocked, setAspectRatioLocked] = useState(false);
   
   const [prompts, setPrompts] = useState<string[]>(Array(6).fill(''));
+  const [promptActiveCharacterIds, setPromptActiveCharacterIds] = useState<number[]>([]);
   const [generatedImages, setGeneratedImages] = useState<GeneratedImageResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSuggesting, setIsSuggesting] = useState(false);
@@ -36,7 +37,6 @@ const App: React.FC = () => {
   
   const [storyName, setStoryName] = useState('NewStory');
   const [seriesName, setSeriesName] = useState('NewSeries');
-  const [sceneNumber, setSceneNumber] = useState('1');
   const [synopsis, setSynopsis] = useState('');
   
   const [previewImage, setPreviewImage] = useState<string | null>(null);
@@ -68,19 +68,19 @@ const App: React.FC = () => {
         : undefined;
 
     const results: GeneratedImageResult[] = [];
-    const activePrompts = prompts.filter(p => p.trim());
+    const activePrompts = prompts.map((p, i) => ({ text: p, originalIndex: i + 1 })).filter(p => p.text.trim());
     
     for (let i = 0; i < activePrompts.length; i++) {
-      const prompt = activePrompts[i];
+      const { text, originalIndex } = activePrompts[i];
       try {
-        const fullPrompt = `${style !== ImageStyle.USE_REFERENCE_ONE ? `In a ${style} style, ` : ''}generate an image for the scene: "${prompt}". Consistent characters: ${selectedCharacters.map(c => c.name).join(', ')}. Story context: ${synopsis.slice(0, 200)}`;
+        const fullPrompt = `${style !== ImageStyle.USE_REFERENCE_ONE ? `In a ${style} style, ` : ''}generate an image for the scene: "${text}". Consistent characters: ${selectedCharacters.map(c => c.name).join(', ')}. Story context: ${synopsis.slice(0, 200)}`;
         const imageData = await generateImageWithRetry(fullPrompt, referenceImages, styleRef);
         if (imageData) {
-          results.push({ id: crypto.randomUUID(), prompt, imageData, sceneIndex: i + 1 });
+          results.push({ id: crypto.randomUUID(), prompt: text, imageData, sceneIndex: originalIndex });
           setGeneratedImages([...results]);
         }
       } catch (e) {
-        setError(`Failed at scene ${i + 1}.`);
+        setError(`Failed at scene ${originalIndex}.`);
         break;
       }
     }
@@ -115,25 +115,55 @@ const App: React.FC = () => {
       setLoadingSlots(prev => ({ ...prev, [characterId]: false }));
   }, [characters, style]);
 
-  const handleSuggestPrompt = useCallback(async () => {
-    if (prompts.length >= 20) return;
+  const handleSuggestSinglePrompt = useCallback(async (index: number) => {
     setIsSuggesting(true);
     try {
-      const characterNames = characters.filter(c => c.isSelected).map(c => c.name);
-      const newPrompt = await suggestCreativePrompt({
-        storyName,
-        seriesName,
-        characters: characterNames,
-        existingPrompts: prompts,
-        synopsis
-      });
-      setPrompts(prev => [...prev, newPrompt]);
+        const activeCharNames = characters.filter(c => promptActiveCharacterIds.includes(c.id)).map(c => c.name);
+        const newPrompt = await suggestCreativePrompt({
+            storyName,
+            seriesName,
+            characters: characters.map(c => c.name),
+            activeCharacters: activeCharNames,
+            existingPrompts: prompts,
+            synopsis
+        });
+        const newPrompts = [...prompts];
+        newPrompts[index] = newPrompt;
+        setPrompts(newPrompts);
     } catch (e) {
-      setError("Failed to suggest prompt.");
+        setError("Failed to suggest scene.");
     } finally {
-      setIsSuggesting(false);
+        setIsSuggesting(false);
     }
-  }, [characters, storyName, seriesName, prompts, synopsis]);
+  }, [characters, promptActiveCharacterIds, storyName, seriesName, prompts, synopsis]);
+
+  const handleSuggestBulkPrompts = useCallback(async () => {
+    setIsSuggesting(true);
+    try {
+        const emptyIndices = prompts.map((p, i) => p.trim() === '' ? i : -1).filter(i => i !== -1);
+        if (emptyIndices.length === 0) return;
+
+        const activeCharNames = characters.filter(c => promptActiveCharacterIds.includes(c.id)).map(c => c.name);
+        const suggested = await suggestBulkScenes({
+            storyName,
+            seriesName,
+            activeCharacters: activeCharNames,
+            synopsis,
+            count: emptyIndices.length,
+            existingScenes: prompts
+        });
+
+        const newPrompts = [...prompts];
+        emptyIndices.forEach((targetIdx, i) => {
+            if (suggested[i]) newPrompts[targetIdx] = suggested[i];
+        });
+        setPrompts(newPrompts);
+    } catch (e) {
+        setError("Failed to populate scenes.");
+    } finally {
+        setIsSuggesting(false);
+    }
+  }, [characters, promptActiveCharacterIds, storyName, seriesName, prompts, synopsis]);
 
   const handleGenerateSynopsis = async () => {
     setIsLoading(true);
@@ -164,7 +194,6 @@ const App: React.FC = () => {
                 error={error} 
                 storyName={storyName}
                 seriesName={seriesName}
-                sceneNumber={sceneNumber}
                 onPreview={setPreviewImage}
             />
         </div>
@@ -187,15 +216,16 @@ const App: React.FC = () => {
               prompts={prompts}
               setPrompts={setPrompts}
               onGenerateAll={handleGenerateAll}
-              onSuggestPrompt={handleSuggestPrompt}
+              onSuggestPrompt={handleSuggestBulkPrompts}
+              onSuggestSinglePrompt={handleSuggestSinglePrompt}
+              promptActiveCharacterIds={promptActiveCharacterIds}
+              setPromptActiveCharacterIds={setPromptActiveCharacterIds}
               isLoading={isLoading}
               isSuggesting={isSuggesting}
               storyName={storyName}
               setStoryName={setStoryName}
               seriesName={seriesName}
               setSeriesName={setSeriesName}
-              sceneNumber={sceneNumber}
-              setSceneNumber={setSceneNumber}
               synopsis={synopsis}
               setSynopsis={setSynopsis}
               onGenerateSynopsis={handleGenerateSynopsis}
