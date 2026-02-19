@@ -1,5 +1,6 @@
 
 export enum ImageStyle {
+  USE_REFERENCE_ONE = 'Use reference image one',
   NINETIES_CARTOON = '90s Cartoon',
   ANIME = 'Anime',
   COMIC_HERO = 'Comic Hero',
@@ -22,10 +23,12 @@ export interface Character {
   mimeType: string | null;
   rotation: number;
   isSelected: boolean;
+  prompt: string;
 }
 
 export interface GeneratedImageResult {
   id: string;
   prompt: string;
   imageData: string;
+  sceneIndex: number;
 }
