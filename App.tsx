@@ -40,6 +40,35 @@ const App: React.FC = () => {
   const [synopsis, setSynopsis] = useState('');
   
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
+
+  const handleResetAll = useCallback(() => {
+    setCharacters(
+      INITIAL_CHARACTERS.map((name, i) => ({
+        id: i + 1,
+        name,
+        image: null,
+        mimeType: null,
+        rotation: 0,
+        isSelected: i < 4,
+        prompt: ''
+      }))
+    );
+    setStyle(ImageStyle.ANIME);
+    setAspectRatio(AspectRatio.ONE_ONE);
+    setStyleLocked(false);
+    setAspectRatioLocked(false);
+    setPrompts(Array(6).fill(''));
+    setPromptActiveCharacterIds([]);
+    setGeneratedImages([]);
+    setError(null);
+    setLoadingSlots({});
+    setStoryName('NewStory');
+    setSeriesName('NewSeries');
+    setSynopsis('');
+    setPreviewImage(null);
+    setIsResetConfirmOpen(false);
+  }, []);
 
   const handleUpdateCharacter = (updatedCharacter: Character) => {
     setCharacters(characters.map(c => c.id === updatedCharacter.id ? updatedCharacter : c));
@@ -74,18 +103,32 @@ const App: React.FC = () => {
       const { text, originalIndex } = activePrompts[i];
       try {
         const fullPrompt = `${style !== ImageStyle.USE_REFERENCE_ONE ? `In a ${style} style, ` : ''}generate an image for the scene: "${text}". Consistent characters: ${selectedCharacters.map(c => c.name).join(', ')}. Story context: ${synopsis.slice(0, 200)}`;
-        const imageData = await generateImageWithRetry(fullPrompt, referenceImages, styleRef);
+        const imageData = await generateImageWithRetry(fullPrompt, referenceImages, styleRef, aspectRatio);
         if (imageData) {
           results.push({ id: crypto.randomUUID(), prompt: text, imageData, sceneIndex: originalIndex });
           setGeneratedImages([...results]);
         }
-      } catch (e) {
-        setError(`Failed at scene ${originalIndex}.`);
+      } catch (e: any) {
+        const errorDetail = e?.message || String(e);
+        try {
+          if (errorDetail.startsWith('{')) {
+            const parsed = JSON.parse(errorDetail);
+            parsed.message = `Failed at Scene ${originalIndex}: ${parsed.message}`;
+            setError(JSON.stringify(parsed));
+          } else {
+            setError(JSON.stringify({
+              message: `Failed at Scene ${originalIndex}: ${errorDetail}`,
+              solution: "Verify your connection is active and that your model prompt descriptions are short and clear."
+            }));
+          }
+        } catch {
+          setError(errorDetail);
+        }
         break;
       }
     }
     setIsLoading(false);
-  }, [characters, prompts, style, synopsis]);
+  }, [characters, prompts, style, synopsis, aspectRatio]);
   
   const handleGenerateCharacter = useCallback(async (characterId: number) => {
       const character = characters.find(c => c.id === characterId);
@@ -101,7 +144,7 @@ const App: React.FC = () => {
             : undefined;
 
         const prompt = `${style !== ImageStyle.USE_REFERENCE_ONE ? `Style: ${style}. ` : ''}${promptText}`;
-        const imageData = await generateImageWithRetry(prompt, [], styleRef);
+        const imageData = await generateImageWithRetry(prompt, [], styleRef, aspectRatio);
         if (imageData) {
             handleUpdateCharacter({
                 ...character,
@@ -109,11 +152,25 @@ const App: React.FC = () => {
                 mimeType: 'image/png'
             });
         }
-      } catch (e) {
-        setError(`Failed to generate character ${character.name}`);
+      } catch (e: any) {
+        const errorDetail = e?.message || String(e);
+        try {
+          if (errorDetail.startsWith('{')) {
+            const parsed = JSON.parse(errorDetail);
+            parsed.message = `Failed to generate portrait for ${character.name}: ${parsed.message}`;
+            setError(JSON.stringify(parsed));
+          } else {
+            setError(JSON.stringify({
+              message: `Failed to generate portrait for ${character.name}: ${errorDetail}`,
+              solution: "Double-check that you have specified a clear description prompt in Settings and submit again."
+            }));
+          }
+        } catch {
+          setError(errorDetail);
+        }
       }
       setLoadingSlots(prev => ({ ...prev, [characterId]: false }));
-  }, [characters, style]);
+  }, [characters, style, aspectRatio]);
 
   const handleSuggestSinglePrompt = useCallback(async (index: number) => {
     setIsSuggesting(true);
@@ -130,8 +187,20 @@ const App: React.FC = () => {
         const newPrompts = [...prompts];
         newPrompts[index] = newPrompt;
         setPrompts(newPrompts);
-    } catch (e) {
-        setError("Failed to suggest scene.");
+    } catch (e: any) {
+        const errorDetail = e?.message || String(e);
+        try {
+          if (errorDetail.startsWith('{')) {
+            setError(errorDetail);
+          } else {
+            setError(JSON.stringify({
+              message: `Failed to suggest scene: ${errorDetail}`,
+              solution: "To resolve, enter a brief synopsis or series name to supply more contextual clues for Gemini."
+            }));
+          }
+        } catch {
+          setError(`Failed to suggest scene: ${errorDetail}`);
+        }
     } finally {
         setIsSuggesting(false);
     }
@@ -158,8 +227,20 @@ const App: React.FC = () => {
             if (suggested[i]) newPrompts[targetIdx] = suggested[i];
         });
         setPrompts(newPrompts);
-    } catch (e) {
-        setError("Failed to populate scenes.");
+    } catch (e: any) {
+        const errorDetail = e?.message || String(e);
+        try {
+          if (errorDetail.startsWith('{')) {
+            setError(errorDetail);
+          } else {
+            setError(JSON.stringify({
+              message: `Failed to populate scenes: ${errorDetail}`,
+              solution: "Verify that your storyline synopsis contains clear narrative descriptions for prompt extraction."
+            }));
+          }
+        } catch {
+          setError(`Failed to populate scenes: ${errorDetail}`);
+        }
     } finally {
         setIsSuggesting(false);
     }
@@ -183,7 +264,7 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-black font-sans flex flex-col overflow-hidden">
-      <Header />
+      <Header onResetTrigger={() => setIsResetConfirmOpen(true)} />
       
       <div className="flex-1 flex flex-col">
         {/* TOP: Results Display */}
@@ -247,6 +328,51 @@ const App: React.FC = () => {
               >
                <XIcon />
             </button>
+          </div>
+        </div>
+      )}
+
+      {isResetConfirmOpen && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+          <div className="bg-gray-900 border border-red-500/30 w-full max-w-md rounded-2xl p-6 shadow-2xl transform transition-transform duration-300 scale-100 flex flex-col space-y-4">
+            <div className="flex items-center space-x-3 text-red-500">
+              <div className="bg-red-950 p-2 rounded-lg border border-red-800/40">
+                <svg className="w-5 h-5 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <h3 className="text-sm font-black uppercase tracking-widest text-red-400">Confirm Global Reset</h3>
+            </div>
+
+            <p className="text-gray-300 text-xs leading-relaxed font-medium">
+              Are you sure you want to clear your entire storyline? This resets:
+            </p>
+            
+            <ul className="text-gray-400 text-[11px] space-y-1 list-disc list-inside">
+              <li>All 10 customized Cast characters and portraits</li>
+              <li>Story Name, Series Name, and text Synopsis</li>
+              <li>Style configurations and lock states</li>
+              <li>All scene prompts and successfully rendered result images</li>
+            </ul>
+
+            <p className="text-gray-400 text-[11px] italic font-semibold border-l-2 border-red-500/40 pl-2 py-0.5">
+              Warning: This action is destructive and cannot be undone.
+            </p>
+
+            <div className="flex flex-col sm:flex-row gap-2 pt-2">
+              <button
+                onClick={() => setIsResetConfirmOpen(false)}
+                className="flex-1 py-2.5 px-4 bg-gray-800 hover:bg-gray-750 text-gray-300 font-bold text-[10px] tracking-widest uppercase rounded-xl transition-all"
+              >
+                No, Keep My Progress
+              </button>
+              <button
+                onClick={handleResetAll}
+                className="flex-1 py-2.5 px-4 bg-red-600 hover:bg-red-500 text-white font-black text-[10px] tracking-widest uppercase rounded-xl shadow-lg shadow-red-950/20 hover:shadow-red-500/10 transition-all border border-red-500/20"
+              >
+                Yes, Reset Everything
+              </button>
+            </div>
           </div>
         </div>
       )}

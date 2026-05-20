@@ -54,11 +54,40 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ images, isLoadin
         )}
       </div>
 
-      {error && (
-        <div className="bg-red-950/30 border border-red-900/50 text-red-500 text-[10px] font-bold uppercase tracking-widest px-4 py-3 rounded mb-4">
-          Error: {error}
-        </div>
-      )}
+      {error && (() => {
+        let displayError = error;
+        let solution: string | null = null;
+        try {
+          if (error.startsWith('{')) {
+            const parsed = JSON.parse(error);
+            displayError = parsed.message;
+            solution = parsed.solution;
+          }
+        } catch (_) {}
+
+        return (
+          <div className="bg-red-950/20 border border-red-900/40 p-5 rounded-2xl mb-6 flex flex-col space-y-3">
+            <div className="flex items-start space-x-3">
+              <div className="bg-red-950 text-red-400 p-2 rounded-lg border border-red-800/40 mt-0.5">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-red-400 text-xs font-black uppercase tracking-widest">Operation Interrupted</h3>
+                <p className="text-gray-300 text-xs font-medium mt-1.5 leading-relaxed break-words">{displayError}</p>
+              </div>
+            </div>
+            
+            {solution && (
+              <div className="bg-red-950/40 rounded-xl p-4 border border-red-900/30">
+                <h4 className="text-bee-gold text-[10px] font-black uppercase tracking-wider mb-2">Suggested Resolution:</h4>
+                <p className="text-gray-300 text-xs leading-relaxed font-semibold">{solution}</p>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {images.length === 0 && !isLoading && (
          <div className="flex items-center justify-center h-48 text-center text-gray-700 border-2 border-dashed border-gray-900 rounded-2xl">
